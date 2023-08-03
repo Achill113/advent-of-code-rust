@@ -234,7 +234,7 @@ mod tests {
 
         let rounds = parse_input(&input);
 
-        let total_score = evaluate_game_part_one(rounds);
+        let total_score = evaluate_game_part_one(&rounds);
 
         assert!(total_score == 15);
     }
@@ -245,7 +245,7 @@ mod tests {
 
         let rounds = parse_input(&input);
 
-        let total_score = evaluate_game_part_two(rounds);
+        let total_score = evaluate_game_part_two(&rounds);
 
         assert!(total_score == 12);
     }
