@@ -3,8 +3,23 @@ use std::fs;
 #[derive(Copy, Clone, PartialEq)]
 enum RoundResult {
     Draw,
-    First,
-    Second,
+    Lose,
+    Win,
+}
+
+trait Character {
+    fn get_necessary_result(&self) -> RoundResult;
+}
+
+impl Character for char {
+    fn get_necessary_result(&self) -> RoundResult {
+        match *self {
+            'X' => RoundResult::Lose,
+            'Y' => RoundResult::Draw,
+            'Z' => RoundResult::Win,
+            _ => panic!("Unexpected character")
+        }
+    }
 }
 
 trait Points {
@@ -14,9 +29,9 @@ trait Points {
 impl Points for RoundResult {
     fn get_points(&self) -> i32 {
         match *self {
-            RoundResult::First => 0,
+            RoundResult::Lose => 0,
             RoundResult::Draw => 3,
-            RoundResult::Second => 6
+            RoundResult::Win => 6
         }
     }
 }
@@ -28,8 +43,23 @@ enum Shape {
     Scissors
 }
 
+trait Char {
+    fn get_char(&self) -> char;
+}
+
+impl Char for Shape {
+    fn get_char(&self) -> char {
+        match *self {
+            Shape::Rock => 'A',
+            Shape::Paper => 'B',
+            Shape::Scissors => 'C'
+        }
+    }
+}
+
 trait Beats {
     fn beats(&self) -> Self;
+    fn beats_me(&self) -> Self;
 }
 
 impl Beats for Shape {
@@ -38,6 +68,14 @@ impl Beats for Shape {
             Shape::Rock => Shape::Scissors,
             Shape::Paper => Shape::Rock,
             Shape::Scissors => Shape::Paper
+        }
+    }
+
+    fn beats_me(&self) -> Self {
+        match *self {
+            Shape::Rock => Shape::Paper,
+            Shape::Paper => Shape::Scissors,
+            Shape::Scissors => Shape::Rock
         }
     }
 }
@@ -62,19 +100,19 @@ fn parse_input(input: &str) -> Vec<(char, char)> {
 
             let mut first_chars = plays[0].chars();
 
-            let first_move = match first_chars.nth(0) {
+            let their_move = match first_chars.nth(0) {
                 Some(it) => it,
-                None => panic!("Could not parse first move")
+                None => panic!("Could not parse their move")
             };
 
-            let mut second_chars = plays[1].chars();
+            let mut my_chars = plays[1].chars();
 
-            let second_move = match second_chars.nth(0) {
+            let my_move = match my_chars.nth(0) {
                 Some(it) => it,
-                None => panic!("Could not parse second move")
+                None => panic!("Could not parse my move")
             };
 
-            return (first_move, second_move);
+            return (their_move, my_move);
         }).collect();
 
     return rounds;
@@ -90,19 +128,31 @@ fn evaluate_shape(letter: &char) -> Shape {
 }
 
 fn evaluate_round(round: &(char, char)) -> RoundResult {
-    let first_shape = evaluate_shape(&round.0);
-    let second_shape = evaluate_shape(&round.1);
+    let their_shape = evaluate_shape(&round.0);
+    let my_shape = evaluate_shape(&round.1);
 
-    let (first_beats, second_beats) = (first_shape.beats(), second_shape.beats());
+    let (their_beats, my_beats) = (their_shape.beats(), my_shape.beats());
 
-    match (first_beats, second_beats) {
-        _ if first_beats == second_shape => RoundResult::First,
-        _ if second_beats == first_shape => RoundResult::Second,
+    match (their_beats, my_beats) {
+        _ if their_beats == my_shape => RoundResult::Lose,
+        _ if my_beats == their_shape => RoundResult::Win,
         _                            => RoundResult::Draw,
     }
 }
 
-fn evaluate_game(rounds: Vec<(char, char)>) -> i32 {
+fn get_necessary_hand(their_hand: &char, result: &RoundResult) -> Shape {
+    let their_shape = evaluate_shape(&their_hand);
+
+    let their_beats = their_shape.beats();
+
+    match *result {
+        RoundResult::Lose => their_beats,
+        RoundResult::Draw => their_shape,
+        RoundResult::Win => their_shape.beats_me()
+    }
+}
+
+fn evaluate_game_part_one(rounds: &Vec<(char, char)>) -> i32 {
     let mut total_score: i32 = 0;
 
     for round in rounds {
@@ -115,14 +165,33 @@ fn evaluate_game(rounds: Vec<(char, char)>) -> i32 {
     return total_score;
 }
 
+fn evaluate_game_part_two(rounds: &Vec<(char, char)>) -> i32 {
+    let mut total_score: i32 = 0;
+
+    for round in rounds {
+        let necessary_result = round.1.get_necessary_result();
+        let necessary_shape = get_necessary_hand(&round.0, &necessary_result);
+
+        let result = evaluate_round(&(round.0, necessary_shape.get_char()));
+
+        total_score += result.get_points() + necessary_shape.get_points();
+    }
+
+    return total_score;
+}
+
 fn main() {
     let input = fs::read_to_string("./input.txt").expect("Error reading input.");
 
     let rounds = parse_input(&input);
 
-    let total_score = evaluate_game(rounds);
+    let total_score_part_one = evaluate_game_part_one(&rounds);
 
-    dbg!(total_score);
+    dbg!(total_score_part_one);
+
+    let total_score_part_two = evaluate_game_part_two(&rounds);
+
+    dbg!(total_score_part_two);
 }
 
 #[cfg(test)]
@@ -140,33 +209,44 @@ mod tests {
 
     #[test]
     fn rock_beats_scissors() {
-        let first: char = 'A';
-        let second: char = 'Z';
-        assert!(evaluate_round(&(first, second)) == RoundResult::First);
+        let other: char = 'A';
+        let mine: char = 'Z';
+        assert!(evaluate_round(&(other, mine)) == RoundResult::Lose);
     }
 
     #[test]
     fn paper_beats_rock() {
-        let first: char = 'B';
-        let second: char = 'X';
-        assert!(evaluate_round(&(first, second)) == RoundResult::First);
+        let other: char = 'B';
+        let mine: char = 'X';
+        assert!(evaluate_round(&(other, mine)) == RoundResult::Lose);
     }
 
     #[test]
     fn scissors_beats_papper() {
-        let first: char = 'C';
-        let second: char = 'Y';
-        assert!(evaluate_round(&(first, second)) == RoundResult::First);
+        let other: char = 'C';
+        let mine: char = 'Y';
+        assert!(evaluate_round(&(other, mine)) == RoundResult::Lose);
     }
 
     #[test]
-    fn evaluate_game_should_return_total_score() {
+    fn evaluate_game_part_one_should_return_total_score() {
         let input = fs::read_to_string("./example-input.txt").expect("Error reading input.");
 
         let rounds = parse_input(&input);
 
-        let total_score = evaluate_game(rounds);
+        let total_score = evaluate_game_part_one(rounds);
 
         assert!(total_score == 15);
+    }
+
+    #[test]
+    fn evaluate_game_part_two_should_return_total_score() {
+        let input = fs::read_to_string("./example-input.txt").expect("Error reading input.");
+
+        let rounds = parse_input(&input);
+
+        let total_score = evaluate_game_part_two(rounds);
+
+        assert!(total_score == 12);
     }
 }
